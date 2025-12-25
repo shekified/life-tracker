@@ -287,15 +287,22 @@ export default function Home() {
         ))}
       </div>
 
-      <input
-        className="mt-4 w-full rounded-xl border border-black px-4 py-3 text-sm placeholder:text-black outline-none"
-        placeholder="Capture a task (goes to Inbox)"
-        value={newBlock}
-        onChange={e => setNewBlock(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && addBlock()}
-      />
+<div className="mt-4 flex gap-2">
+  <input
+    className="flex-1 rounded-xl border border-black px-4 py-3 text-sm placeholder:text-black outline-none"
+    placeholder="Capture a task (goes to Inbox)"
+    value={newBlock}
+    onChange={e => setNewBlock(e.target.value)}
+    onKeyDown={e => e.key === "Enter" && addBlock()}
+  />
 
-
+  <button
+    onClick={addBlock}
+    className="rounded-xl border border-black px-4 py-3 text-sm font-medium bg-black text-white active:scale-95"
+  >
+    Add
+  </button>
+</div>
 
       <label className="mt-3 flex items-center gap-2 text-sm">
         <input
