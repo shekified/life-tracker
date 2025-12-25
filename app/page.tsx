@@ -19,6 +19,7 @@ import {
 
 /* ---------- TYPES ---------- */
 type Category = "Work" | "Health" | "Skill" | "Personal";
+type Status = "inbox" | "today";
 
 type Block = {
   id: number;
@@ -28,6 +29,7 @@ type Block = {
   date: string;
   isRecurring: boolean;
   order: number;
+  status: Status;
 };
 
 /* ---------- HELPERS ---------- */
@@ -47,13 +49,18 @@ function streak(blocks: Block[]) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const date = d.toISOString().split("T")[0];
-    if (blocks.some(b => b.date === date && b.completed)) s++;
+    if (
+      blocks.some(
+        b => b.status === "today" && b.date === date && b.completed
+      )
+    )
+      s++;
     else break;
   }
   return s;
 }
 
-/* ---------- SORTABLE ---------- */
+/* ---------- SORTABLE WRAPPER ---------- */
 function SortableBlock({
   block,
   children,
@@ -76,10 +83,7 @@ function SortableBlock({
   return (
     <div
       ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
     >
       {children({ setActivatorNodeRef, listeners })}
@@ -91,6 +95,7 @@ function SortableBlock({
 export default function Home() {
   const today = todayStr();
 
+  /* STATE */
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [newBlock, setNewBlock] = useState("");
   const [category, setCategory] = useState<Category>("Work");
@@ -106,10 +111,18 @@ export default function Home() {
     localStorage.setItem("blocks", JSON.stringify(blocks));
   }, [blocks]);
 
-  /* RECURRING */
+  /* RECURRING (ONLY FOR TODAY TASKS) */
   useEffect(() => {
-    const templates = blocks.filter(b => b.isRecurring && b.date !== today);
-    const existsToday = blocks.some(b => b.isRecurring && b.date === today);
+    const templates = blocks.filter(
+      b =>
+        b.isRecurring &&
+        b.status === "today" &&
+        b.date !== today
+    );
+
+    const existsToday = blocks.some(
+      b => b.isRecurring && b.status === "today" && b.date === today
+    );
     if (existsToday) return;
 
     const generated = templates.map(b => ({
@@ -125,24 +138,31 @@ export default function Home() {
   }, [today]); // eslint-disable-line
 
   /* DERIVED */
-  const todaysBlocks = blocks
-    .filter(b => b.date === today)
+  const inboxBlocks = blocks
+    .filter(b => b.status === "inbox")
     .sort((a, b) => a.order - b.order);
 
-  const completed = todaysBlocks.filter(b => b.completed).length;
+  const todaysBlocks = blocks
+    .filter(b => b.status === "today" && b.date === today)
+    .sort((a, b) => a.order - b.order);
+
+  const completedCount = todaysBlocks.filter(b => b.completed).length;
   const progress =
     todaysBlocks.length === 0
       ? 0
-      : Math.round((completed / todaysBlocks.length) * 100);
+      : Math.round((completedCount / todaysBlocks.length) * 100);
 
   const weeklyData = last7Days().map(d => ({
     date: d.slice(5),
-    completed: blocks.filter(b => b.date === d && b.completed).length,
+    completed: blocks.filter(
+      b => b.status === "today" && b.date === d && b.completed
+    ).length,
   }));
 
   /* ACTIONS */
   function addBlock() {
     if (!newBlock.trim()) return;
+
     setBlocks(prev => [
       ...prev,
       {
@@ -152,21 +172,56 @@ export default function Home() {
         category,
         date: today,
         isRecurring,
-        order: todaysBlocks.length,
+        order: inboxBlocks.length,
+        status: "inbox",
       },
     ]);
+
     setNewBlock("");
     setIsRecurring(false);
   }
 
   function toggleBlock(id: number) {
     setBlocks(prev =>
-      prev.map(b => (b.id === id ? { ...b, completed: !b.completed } : b))
+      prev.map(b =>
+        b.id === id ? { ...b, completed: !b.completed } : b
+      )
     );
   }
 
   function deleteBlock(id: number) {
     setBlocks(prev => prev.filter(b => b.id !== id));
+  }
+
+  function moveToToday(id: number) {
+    setBlocks(prev =>
+      prev.map(b =>
+        b.id === id
+          ? {
+              ...b,
+              status: "today",
+              date: today,
+              completed: false,
+              order: todaysBlocks.length,
+            }
+          : b
+      )
+    );
+  }
+
+  function moveToInbox(id: number) {
+    setBlocks(prev =>
+      prev.map(b =>
+        b.id === id
+          ? {
+              ...b,
+              status: "inbox",
+              completed: false,
+              order: inboxBlocks.length,
+            }
+          : b
+      )
+    );
   }
 
   function handleDragEnd(event: any) {
@@ -175,7 +230,7 @@ export default function Home() {
 
     setBlocks(prev => {
       const todayItems = prev
-        .filter(b => b.date === today)
+        .filter(b => b.status === "today" && b.date === today)
         .sort((a, b) => a.order - b.order);
 
       const oldIndex = todayItems.findIndex(b => b.id === active.id);
@@ -186,7 +241,9 @@ export default function Home() {
       reordered.splice(newIndex, 0, moved);
 
       const updated = reordered.map((b, i) => ({ ...b, order: i }));
-      const others = prev.filter(b => b.date !== today);
+      const others = prev.filter(
+        b => !(b.status === "today" && b.date === today)
+      );
 
       return [...others, ...updated];
     });
@@ -195,42 +252,9 @@ export default function Home() {
   /* UI */
   return (
     <main className="min-h-screen max-w-xl mx-auto p-6 bg-white text-black">
-      {/* ↑ THIS LINE FORCES BLACK EVERYWHERE */}
-
       <h1 className="text-2xl font-semibold">Today</h1>
       <p className="text-sm">{new Date().toDateString()}</p>
-
-      <input
-        className="mt-4 w-full rounded-xl border border-black px-4 py-3 text-sm font-medium placeholder:text-black focus:ring-2 focus:ring-black outline-none"
-        placeholder="What will you execute next?"
-        value={newBlock}
-        onChange={e => setNewBlock(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && addBlock()}
-      />
-
-      <div className="mt-3 flex gap-2 text-xs">
-        {(["Work", "Health", "Skill", "Personal"] as Category[]).map(c => (
-          <button
-            key={c}
-            onClick={() => setCategory(c)}
-            className={`px-3 py-1 rounded-full border border-black ${
-              category === c ? "bg-black text-white" : ""
-            }`}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      <label className="mt-3 flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={isRecurring}
-          onChange={e => setIsRecurring(e.target.checked)}
-        />
-        Repeat daily
-      </label>
-
+      {/* PROGRESS */}
       <div className="mt-6">
         <div className="flex justify-between text-sm mb-1">
           <span>Daily Progress</span>
@@ -248,7 +272,70 @@ export default function Home() {
         <span className="text-sm">Consistency</span>
         <span className="font-semibold">{streak(blocks)} days</span>
       </div>
+      
+      <div className="mt-3 flex gap-2 text-xs">
+        {(["Work", "Health", "Skill", "Personal"] as Category[]).map(c => (
+          <button
+            key={c}
+            onClick={() => setCategory(c)}
+            className={`px-3 py-1 rounded-full border border-black ${
+              category === c ? "bg-black text-white" : ""
+            }`}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
 
+      <input
+        className="mt-4 w-full rounded-xl border border-black px-4 py-3 text-sm placeholder:text-black outline-none"
+        placeholder="Capture a task (goes to Inbox)"
+        value={newBlock}
+        onChange={e => setNewBlock(e.target.value)}
+        onKeyDown={e => e.key === "Enter" && addBlock()}
+      />
+
+
+
+      <label className="mt-3 flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={isRecurring}
+          onChange={e => setIsRecurring(e.target.checked)}
+        />
+        Repeat daily
+      </label>
+
+      {/* INBOX */}
+      <details className="mt-6">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Inbox ({inboxBlocks.length})
+        </summary>
+
+        <div className="mt-3 space-y-2">
+          {inboxBlocks.map(block => (
+            <div
+              key={block.id}
+              className="flex justify-between items-center border border-black rounded-xl px-4 py-3"
+            >
+              <span>{block.title}</span>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => moveToToday(block.id)}
+                  className="border border-black px-2 py-1 rounded text-xs"
+                >
+                  Today
+                </button>
+                <button onClick={() => deleteBlock(block.id)}>✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </details>
+
+
+      {/* TODAY */}
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext
           items={todaysBlocks.map(b => b.id)}
@@ -277,9 +364,7 @@ export default function Home() {
                       <div>
                         <div
                           className={
-                            block.completed
-                              ? "line-through opacity-60"
-                              : ""
+                            block.completed ? "line-through opacity-60" : ""
                           }
                         >
                           {block.title}
@@ -291,7 +376,15 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <button onClick={() => deleteBlock(block.id)}>✕</button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => moveToInbox(block.id)}
+                        className="border border-black px-2 py-1 rounded text-xs"
+                      >
+                        Inbox
+                      </button>
+                      <button onClick={() => deleteBlock(block.id)}>✕</button>
+                    </div>
                   </div>
                 )}
               </SortableBlock>
@@ -300,12 +393,13 @@ export default function Home() {
         </SortableContext>
       </DndContext>
 
+      {/* ANALYTICS */}
       <details className="mt-10">
         <summary className="cursor-pointer text-sm">
           View weekly analytics
         </summary>
         <div className="h-64 mt-4">
-          <ResponsiveContainer width="100%" aspect={2}>
+          <ResponsiveContainer width="100%" height={256}>
             <BarChart data={weeklyData}>
               <XAxis dataKey="date" />
               <YAxis allowDecimals={false} />
