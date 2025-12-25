@@ -1,6 +1,6 @@
 {
-  "name": "Life Tracker",
-  "short_name": "Life",
+  "name": "Zenbit",
+  "short_name": "Zenbit",
   "description": "Personal execution OS",
   "start_url": "/",
   "display": "standalone",

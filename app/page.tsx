@@ -252,7 +252,8 @@ export default function Home() {
   /* UI */
   return (
     <main className="min-h-screen max-w-xl mx-auto p-6 bg-white text-black">
-      <h1 className="text-2xl font-semibold">Today</h1>
+      <h1 className="text-2xl font-semibold">Zenbit</h1>
+      <p className="text-sm mt-1">Today</p>
       <p className="text-sm">{new Date().toDateString()}</p>
       {/* PROGRESS */}
       <div className="mt-6">
